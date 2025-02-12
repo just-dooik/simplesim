@@ -114,14 +114,18 @@ mshr_lookup(
   for(entry = mshr->entries; entry != mshr->entries + mshr->nentries; entry++) {
     if(entry->status & MSHR_ENTRY_VALID && entry->block_addr == block_addr) 
       return entry;
+    }
     if(entry->status & ~MSHR_ENTRY_VALID) {
       entry_dirty = entry;
-      entry_dirty->block_addr = block_addr;
-      entry_dirty->status |= MSHR_ENTRY_VALID;
-    }
+  } 
+  /* if not found, return the last dirty entry */
+  if(entry_dirty) {
+    entry_dirty->status |= MSHR_ENTRY_VALID;
+    entry_dirty->block_addr = block_addr;
+    return entry_dirty;
   }
-  /* if not found, return the last dirty entry, return NULL  */
-  return entry_dirty;
+  /* if not found, return NULL */
+  return NULL;
 }
 
 /* mshr insert */ // TODO: sent인 경우 처리 필요
@@ -140,12 +144,14 @@ mshr_insert(
   if (!entry) {
     /* 새 entry 할당 */
     entry = &mshr->entries[mshr->nvalid++]; 
-    if (!entry) return NULL;
+    if (!entry) 
+      return NULL;
     
     /* 메모리 요청 전송 */
-    unsigned int lat = mshr_send_request(mshr, entry, now);
+    if(entry->status & ~MSHR_ENTRY_PENDING) {
+      unsigned int lat = mshr_send_request(mshr, entry, now);
+    }
   }
-
 
   /* 블록 추가 */
   if(entry && entry->nvalid < mshr->nblks) { // if entry is valid and not full
@@ -227,4 +233,42 @@ mshr_complete_request(
   }
 
   mshr_free_entry(mshr, entry); // free the entry
+}
+
+void
+mshr_dump(struct mshr_t *mshr, FILE *stream)
+{
+  if (!stream)
+    stream = stderr;
+
+  fprintf(stream, "\n=== MSHR State ===\n");
+  fprintf(stream, "Total entries: %d, Valid entries: %d\n", 
+          mshr->nentries, mshr->nvalid);
+
+  /* dump each entry */
+  for (int i = 0; i < mshr->nentries; i++) {
+    struct mshr_entry_t *entry = &mshr->entries[i];
+    
+    fprintf(stream, "\nEntry %d:\n", i);
+    fprintf(stream, "  status: 0x%x ", entry->status);
+    if (entry->status & MSHR_ENTRY_VALID)   fprintf(stream, "(valid) ");
+    if (entry->status & MSHR_ENTRY_FULL)    fprintf(stream, "(full) ");
+    if (entry->status & MSHR_ENTRY_PENDING) fprintf(stream, "(pending) ");
+    fprintf(stream, "\n");
+    
+    fprintf(stream, "  block_addr: 0x%08x\n", entry->block_addr);
+    fprintf(stream, "  valid blocks: %d\n", entry->nvalid);
+
+    /* dump each block */
+    for (int j = 0; j < entry->nvalid; j++) {
+      struct mshr_blk_t *blk = &entry->blk[j];
+      fprintf(stream, "    block %d:\n", j);
+      fprintf(stream, "      status: 0x%x %s\n", 
+              blk->status,
+              (blk->status & MSHR_BLOCK_VALID) ? "(valid)" : "");
+      fprintf(stream, "      offset: 0x%08x\n", blk->offset);
+      fprintf(stream, "      dest: %p\n", (void*)blk->dest);
+    }
+  }
+  fprintf(stream, "\n");
 }

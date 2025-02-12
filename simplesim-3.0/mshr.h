@@ -53,7 +53,7 @@ struct mshr_t {
   int nvalid; /* number of valid entries */
   int bsize; /* block size */ 
   int nvalid_entries; /* number of valid entries */ 
-  
+
   /* derived data, for fast decoding */
   md_addr_t blk_mask; /* block mask */
   int blk_shift; /* block shift */
@@ -109,6 +109,13 @@ void
 mshr_free_entry( 
   struct mshr_t *mshr, 
   struct mshr_entry_t *entry
+);
+
+/* mshr dump function */
+void
+mshr_dump(
+  struct mshr_t *mshr,
+  FILE *stream
 );
 
 #endif // !MSHR_H
