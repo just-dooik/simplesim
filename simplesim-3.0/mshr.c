@@ -21,7 +21,7 @@
   ((mshr)->nvalid == (mshr)->nentries)  
 /* check if the entry is full */
 #define MSHR_ENTRY_IS_FULL(mshr, entry) \
-  ((entry)->status == MSHR_ENTRY_FULL)
+  ((mshr)->nvalid_entries == (mshr)->nentries)
 /* check if the entry is valid */
 #define MSHR_ENTRY_IS_VALID(mshr, entry) \
   ((entry)->status & MSHR_ENTRY_VALID)
@@ -46,6 +46,7 @@ mshr_create(
   mshr->nentries = nentries;
   mshr->nblks = nblks;
   mshr->bsize = bsize;
+  mshr->nvalid_entries = 0;
 
   /* set the block mask and shift same as cache for efficient decoding */
   mshr->blk_mask = (1 << bsize) - 1;
@@ -69,12 +70,11 @@ mshr_create(
   /* 메모리 접근 함수 설정 */
   mshr->mem_access_fn = mem_access_fn;
 
-  return mshr;
-
   /* initialize entries */
   for(int i = 0; i < nentries; i++) {
     mshr->entries[i].status = 0; 
     mshr->entries[i].block_addr = 0;
+    mshr->entries[i].nvalid = 0;
   } 
 
   /* initialize blocks */
@@ -99,15 +99,29 @@ mshr_lookup(
   md_addr_t addr /* address */
 )
 { 
+  /* if mshr is full, return NULL */
+  if(MSHR_IS_FULL(mshr)) {
+    return NULL;
+  }
+  
+  /* get the block address */
   md_addr_t block_addr = MSHR_BLOCK_ADDR(mshr, addr);
+  
+  struct mshr_entry_t *entry; // using for loop
+  struct mshr_entry_t *entry_dirty; // last dirty entry
 
   /* check if the entry is valid */
-  for(int i = 0; i < mshr->nentries; i++) { 
-    if((mshr->entries[i].status & MSHR_ENTRY_VALID) && mshr->entries[i].block_addr == block_addr) {
-      return &mshr->entries[i];
+  for(entry = mshr->entries; entry != mshr->entries + mshr->nentries; entry++) {
+    if(entry->status & MSHR_ENTRY_VALID && entry->block_addr == block_addr) 
+      return entry;
+    if(entry->status & ~MSHR_ENTRY_VALID) {
+      entry_dirty = entry;
+      entry_dirty->block_addr = block_addr;
+      entry_dirty->status |= MSHR_ENTRY_VALID;
     }
   }
-  return NULL;
+  /* if not found, return the last dirty entry, return NULL  */
+  return entry_dirty;
 }
 
 /* mshr insert */ // TODO: sent인 경우 처리 필요
@@ -125,21 +139,22 @@ mshr_insert(
   entry = mshr_lookup(mshr, addr);
   if (!entry) {
     /* 새 entry 할당 */
-    entry = get_free_entry(mshr);
+    entry = &mshr->entries[mshr->nvalid++]; 
     if (!entry) return NULL;
     
     /* 메모리 요청 전송 */
     unsigned int lat = mshr_send_request(mshr, entry, now);
   }
-  
+
+
   /* 블록 추가 */
   if(entry && entry->nvalid < mshr->nblks) { // if entry is valid and not full
     blk = &entry->blk[entry->nvalid++];
     blk->status &= ~MSHR_BLOCK_VALID;
     blk->offset = MSHR_BLK_OFFSET(mshr, addr);
     blk->dest = rs;
+    blk->status |= MSHR_BLOCK_VALID;
     if(MSHR_ENTRY_IS_FULL(mshr, entry)) { // entry is full 
-      entry->status |= MSHR_ENTRY_FULL;
     }
   }
 
@@ -185,23 +200,31 @@ mshr_send_request(
 * send the data to the destined LSQ station
 */
 void 
-mshr_complete_reqeust(
+mshr_complete_request(
   struct mshr_t *mshr, 
   struct mshr_entry_t *entry, 
   byte_t *data, 
   tick_t now
 )
 {
+  cache_access(
+    cache_dl1, 
+    Write,
+    entry->block_addr, 
+    data, 
+    mshr->bsize, 
+    now, 
+    NULL, NULL
+  );
 
+  /* set the completed status of the destination station */
   for(int i = 0; i < entry->nvalid; i++) {
     struct mshr_blk_t *blk = &entry->blk[i];
     if(blk->status & MSHR_BLOCK_VALID) {
       struct RUU_station *dest = blk->dest;
       dest->completed = TRUE; // set the completed status of the destination station
-      blk->status &= ~MSHR_BLOCK_VALID; // clear the valid status of the block
     }
   }
 
-  entry->nvalid = 0; // clear the number of valid blocks
-  entry->status &= ~MSHR_ENTRY_VALID; // clear the valid status
+  mshr_free_entry(mshr, entry); // free the entry
 }

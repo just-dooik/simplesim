@@ -15,7 +15,6 @@ struct RUU_station;
 
 /* MSHR Block Status */
 #define MSHR_BLOCK_VALID    0x00000001  /* 사용 중 */
-#define MSHR_BLOCK_READY    0x00000002  /* 데이터 도착, 처리 대기 */
 
 /* MSHR Entry Status */
 #define MSHR_ENTRY_VALID    0x00000001  /* 사용 중 */
@@ -28,7 +27,6 @@ struct mshr_blk_t {
   unsigned int status; /* MSHR block status(valid, dirty) */
   md_addr_t offset; /* offset */  
   struct RUU_station *dest; /* destination, only pointer is stored so forward declaration is used */ 
-  enum md_opcode op; /* opcode */ 
 };
 
 /* MSHR entry structure */
@@ -54,6 +52,7 @@ struct mshr_t {
   int nblks; /* number of blocks for each entry */
   int nvalid; /* number of valid entries */
   int bsize; /* block size */ 
+  int nvalid_entries; /* number of valid entries */ 
   
   /* derived data, for fast decoding */
   md_addr_t blk_mask; /* block mask */
