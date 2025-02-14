@@ -72,6 +72,7 @@
 #include "ptrace.h"
 #include "dlite.h"
 #include "sim.h"
+#include "mshr.h"
 
 /*
  * This file implements a very detailed out-of-order issue superscalar
@@ -419,7 +420,40 @@ mem_access_latency(int blk_sz)		/* block size accessed */
 	  (/* remainder chunk latency */mem_lat[1] * (chunks - 1)));
 }
 
+/* mshr access function */
+static unsigned int
+mshr_access_fn(enum mem_cmd cmd,
+	       md_addr_t baddr,
+	       int bsize,
+         struct mshr_entry_t *entry,
+	       tick_t now)
+{
+  unsigned int lat;
 
+  if(cache_dl2) 
+  {
+    lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize,
+                       /* now */now, /* pudata */NULL, /* repl addr */NULL);
+    if(cmd == Read)
+      return lat;
+    else
+      {
+        /* FIXME: unlimited write buffers */
+        return 0;
+      }
+  }
+  else
+    { 
+      /* access main memory */
+      if(cmd == Read)
+        return mem_access_latency(bsize);
+      else
+        {
+          /* FIXME: unlimited write buffers */
+          return 0;
+        }
+    }
+}
 /*
  * cache miss handlers
  */
@@ -433,7 +467,7 @@ dl1_access_fn(enum mem_cmd cmd,		/* access cmd, Read or Write */
 	      tick_t now)		/* time of access */
 {
   unsigned int lat;
-
+  
   if (cache_dl2)
     {
       /* access next level of data cache hierarchy */
@@ -1017,6 +1051,8 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
       cache_dl1 = cache_create(name, nsets, bsize, /* balloc */FALSE,
 			       /* usize */0, assoc, cache_char2policy(c),
 			       dl1_access_fn, /* hit lat */cache_dl1_lat);
+    
+    //TODO: mshr_create 추가
 
       /* is the level 2 D-cache defined? */
       if (!mystricmp(cache_dl2_opt, "none"))
@@ -1533,6 +1569,9 @@ struct RUU_station {
 static struct RUU_station *RUU;		/* register update unit */
 static int RUU_head, RUU_tail;		/* RUU head and tail pointers */
 static int RUU_num;			/* num entries currently in RUU */
+
+/* added: mshr */
+static struct mshr_t *mshr;
 
 /* allocate and initialize register update unit (RUU) */
 static void

@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "sim.h": "c"
+        "sim.h": "c",
+        "memory.h": "c",
+        "*.def": "c"
     }
 }

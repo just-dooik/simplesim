@@ -92,7 +92,6 @@ mshr_create(
 /* lookup mshr
  * returns valid entry if found, otherwise returns NULL
  */
-
 struct mshr_entry_t *
 mshr_lookup(
   struct mshr_t *mshr, 
@@ -128,7 +127,7 @@ mshr_lookup(
   return NULL;
 }
 
-/* mshr insert */ // TODO: sent인 경우 처리 필요
+/* mshr insert */
 struct mshr_entry_t *
 mshr_insert(
   struct mshr_t *mshr,
