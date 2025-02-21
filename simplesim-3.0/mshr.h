@@ -9,9 +9,9 @@
 #include "machine.h"
 #include "memory.h"
 
-
-/* forward declaration of RUU station */
+/* forward declarations */
 struct RUU_station;
+struct cache_t;
 
 /* MSHR Block Status */
 #define MSHR_BLOCK_VALID    0x00000001  /* 사용 중 */
@@ -59,8 +59,15 @@ struct mshr_t {
   int blk_shift; /* block shift */
 
   /* memory access function */
-  mshr_mem_access_fn mem_access_fn;  /* L2/memory access function */
-  unsigned int mem_lat;              /* memory access latency */
+  struct cache_t *cache;  /* associated cache */
+  mshr_mem_access_fn mem_access_fn;
+  unsigned int mem_lat;
+
+  /* statistics */
+  counter_t accesses;    /* total number of accesses */
+  counter_t hits;        /* total number of hits */
+  counter_t misses;      /* total number of misses */
+  counter_t full;        /* number of times MSHR was full */
 };
 
 /* create mshr*/

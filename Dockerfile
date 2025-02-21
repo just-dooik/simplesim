@@ -13,8 +13,9 @@ RUN apt-get update && \
     wget \
     tar \
     flex \
-    bison && \
+    bison \
     vim \
+    git && \
     apt-get clean
 
 # Set the working directory

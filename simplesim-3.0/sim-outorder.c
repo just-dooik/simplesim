@@ -382,10 +382,13 @@ static struct cache_t *cache_il1;
 static struct cache_t *cache_il2;
 
 /* level 1 data cache, entry level data cache */
-static struct cache_t *cache_dl1;
+struct cache_t *cache_dl1 = NULL;  // static 제거, 전역 변수로 선언
 
 /* level 2 data cache */
 static struct cache_t *cache_dl2;
+
+/* added: mshr */
+static struct mshr_t *mshr;
 
 /* instruction TLB */
 static struct cache_t *itlb;
@@ -435,31 +438,7 @@ mshr_access_fn(enum mem_cmd cmd,
          struct mshr_entry_t *entry,
 	       tick_t now)
 {
-  unsigned int lat;
-
-  if(cache_dl2) 
-  {
-    lat = cache_access(cache_dl2, cmd, baddr, NULL, bsize,
-                       /* now */now, /* pudata */NULL, /* repl addr */NULL);
-    if(cmd == Read)
-      return lat;
-    else
-      {
-        /* FIXME: unlimited write buffers */
-        return 0;
-      }
-  }
-  else
-    { 
-      /* access main memory */
-      if(cmd == Read)
-        return mem_access_latency(bsize);
-      else
-        {
-          /* FIXME: unlimited write buffers */
-          return 0;
-        }
-    }
+  return mem_access_latency(bsize);
 }
 
 /*
@@ -918,7 +897,7 @@ sim_reg_options(struct opt_odb_t *odb)
   /* mshr options */
   opt_reg_string(odb, "-mshr",
                  "mshr config, i.e., {<config>|none}",
-                 &mshr_opt, "mshr:8:4:64",  /* default: 8 entries, 4 blocks/entry, 64B block size */
+                 &mshr_opt, "mshr:8:32:4:l",  /* default: 8 entries, 32 blocks/entry, 4B block size */
                  /* print */TRUE, NULL);
 
   opt_reg_int(odb, "-mshr:lat",
@@ -1074,7 +1053,7 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
       if (sscanf(mshr_opt, "%[^:]:%d:%d:%d:%c",
 		 name, &nsets, &bsize, &assoc, &c) != 5)
 	fatal("bad mshr parms: <name>:<nsets>:<bsize>:<assoc>:<repl>");
-      mshr = mshr_create(name, nsets, bsize, /* mem_access_fn */mshr_access_fn);
+      mshr = mshr_create(bsize, nsets, assoc, mshr_access_fn);
       if (sscanf(cache_dl2_opt, "%[^:]:%d:%d:%d:%c",
 		 name, &nsets, &bsize, &assoc, &c) != 5)
 	cache_dl2 = NULL;
@@ -1407,6 +1386,30 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
     }
   ld_reg_stats(sdb);
   mem_reg_stats(mem, sdb);
+
+  /* register mshr stats */
+  if (mshr)
+  {
+    stat_reg_counter(sdb, "mshr.accesses",
+                    "total number of MSHR accesses",
+                    &mshr->nvalid, 0, NULL);
+    
+    stat_reg_counter(sdb, "mshr.hits",
+                    "total number of MSHR hits",
+                    &mshr->nvalid_entries, 0, NULL);
+    
+    stat_reg_formula(sdb, "mshr.misses",
+                    "total number of MSHR misses",
+                    "mshr.accesses - mshr.hits", NULL);
+    
+    stat_reg_counter(sdb, "mshr.full",
+                    "number of times MSHR was full",
+                    &mshr->nentries, 0, NULL);
+    
+    stat_reg_formula(sdb, "mshr.miss_rate",
+                    "MSHR miss rate (misses/ref)",
+                    "mshr.misses / mshr.accesses", NULL);
+  }
 }
 
 /* forward declarations */
@@ -1576,8 +1579,8 @@ struct RUU_station {
      fields to mark input operands as ready, when all these fields have
      been set non-zero, the RUU operation has all of its register
      operands, it may commence execution as soon as all of its memory
-     operands are known to be read (see lsq_refresh() for details on
-     enforcing memory dependencies) */
+     operands are known to be read (see lsq_refresh() for details on how
+     this is accomplished) */
   int idep_ready[MAX_IDEPS];		/* input operand ready? */
 };
 
@@ -1590,9 +1593,6 @@ struct RUU_station {
 static struct RUU_station *RUU;		/* register update unit */
 static int RUU_head, RUU_tail;		/* RUU head and tail pointers */
 static int RUU_num;			/* num entries currently in RUU */
-
-/* added: mshr */
-static struct mshr_t *mshr;
 
 /* allocate and initialize register update unit (RUU) */
 static void

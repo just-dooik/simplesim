@@ -1,9 +1,13 @@
 /* MSHR functions implementation */
 
+#include <math.h>  // for log2
 #include "mshr.h"   
 #include "memory.h" /* for enum mem_cmd */
-#include "sim-outorder.c" // Add this include for RUU_station definition
-#include "machine.h" // Add this include for enum md_opcode
+#include "machine.h" /* for enum md_opcode */
+#include "cache.h"  // for cache_access
+#include "sim-outorder.h" // for RUU_station definition
+
+extern struct cache_t *cache_dl1;  // 추가
 
 /*
 * MSHR macros
@@ -104,7 +108,7 @@ mshr_lookup(
   }
   
   /* get the block address */
-  md_addr_t block_addr = MSHR_BLOCK_ADDR(mshr, addr);
+  md_addr_t block_addr = MSHR_BLK_ADDR(mshr, addr);
   
   struct mshr_entry_t *entry; // using for loop
   struct mshr_entry_t *entry_dirty; // last dirty entry
@@ -213,12 +217,12 @@ mshr_complete_request(
 )
 {
   cache_access(
-    cache_dl1, 
+    cache_dl1,  // mshr->cache 대신 cache_dl1 사용
     Write,
-    entry->block_addr, 
-    data, 
-    mshr->bsize, 
-    now, 
+    entry->block_addr,
+    data,
+    mshr->bsize,
+    now,
     NULL, NULL
   );
 
@@ -227,7 +231,7 @@ mshr_complete_request(
     struct mshr_blk_t *blk = &entry->blk[i];
     if(blk->status & MSHR_BLOCK_VALID) {
       struct RUU_station *dest = blk->dest;
-      dest->completed = TRUE; // set the completed status of the destination station
+      dest->completed = 1; // TRUE -> 1
     }
   }
 
@@ -255,7 +259,7 @@ mshr_dump(struct mshr_t *mshr, FILE *stream)
     if (entry->status & MSHR_ENTRY_PENDING) fprintf(stream, "(pending) ");
     fprintf(stream, "\n");
     
-    fprintf(stream, "  block_addr: 0x%08x\n", entry->block_addr);
+    fprintf(stream, "  block_addr: 0x%08llx\n", entry->block_addr);
     fprintf(stream, "  valid blocks: %d\n", entry->nvalid);
 
     /* dump each block */
@@ -265,7 +269,7 @@ mshr_dump(struct mshr_t *mshr, FILE *stream)
       fprintf(stream, "      status: 0x%x %s\n", 
               blk->status,
               (blk->status & MSHR_BLOCK_VALID) ? "(valid)" : "");
-      fprintf(stream, "      offset: 0x%08x\n", blk->offset);
+      fprintf(stream, "      offset: 0x%08llx\n", blk->offset);
       fprintf(stream, "      dest: %p\n", (void*)blk->dest);
     }
   }
