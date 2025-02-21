@@ -4,8 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - ./simplesim-3.0:/simplesim/simplesim-3.0
-    working_dir: /simplesim/simplesim-3.0
+      - ./simplesim-3.0:/simplesim-3.0
+    working_dir: /simplesim-3.0
     tty: true
     stdin_open: true
     command: ["/bin/bash"]

@@ -22,7 +22,7 @@ RUN apt-get update && \
 WORKDIR /simplesim-3.0
 
 # Copy the SimpleScalar files
-COPY simplesim-3.0/ /simplesim-3.0/
+COPY simplesim-3.0 .
 
 # Build the source code
 RUN make clean && make
