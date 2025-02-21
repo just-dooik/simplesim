@@ -161,6 +161,12 @@ static int LSQ_size = 4;
 /* l1 data cache config, i.e., {<config>|none} */
 static char *cache_dl1_opt;
 
+/* mshr config, i.e., {<config>|none} */
+static char *mshr_opt;
+
+/* mshr hit latency (in cycles) */
+static int mshr_lat;  
+
 /* l1 data cache hit latency (in cycles) */
 static int cache_dl1_lat;
 
@@ -181,6 +187,7 @@ static char *cache_il2_opt;
 
 /* l2 instruction cache hit latency (in cycles) */
 static int cache_il2_lat;
+
 
 /* flush caches on system calls */
 static int flush_on_syscalls;
@@ -420,7 +427,7 @@ mem_access_latency(int blk_sz)		/* block size accessed */
 	  (/* remainder chunk latency */mem_lat[1] * (chunks - 1)));
 }
 
-/* mshr access function */
+/* cache miss handler function for mshr */
 static unsigned int
 mshr_access_fn(enum mem_cmd cmd,
 	       md_addr_t baddr,
@@ -454,6 +461,7 @@ mshr_access_fn(enum mem_cmd cmd,
         }
     }
 }
+
 /*
  * cache miss handlers
  */
@@ -906,6 +914,17 @@ sim_reg_options(struct opt_odb_t *odb)
   opt_reg_flag(odb, "-bugcompat",
 	       "operate in backward-compatible bugs mode (for testing only)",
 	       &bugcompat_mode, /* default */FALSE, /* print */TRUE, NULL);
+
+  /* mshr options */
+  opt_reg_string(odb, "-mshr",
+                 "mshr config, i.e., {<config>|none}",
+                 &mshr_opt, "mshr:8:4:64",  /* default: 8 entries, 4 blocks/entry, 64B block size */
+                 /* print */TRUE, NULL);
+
+  opt_reg_int(odb, "-mshr:lat",
+              "mshr hit latency (in cycles)",
+              &mshr_lat, /* default */1,
+              /* print */TRUE, /* format */NULL);
 }
 
 /* check simulator-specific option values */
@@ -1051,11 +1070,13 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
       cache_dl1 = cache_create(name, nsets, bsize, /* balloc */FALSE,
 			       /* usize */0, assoc, cache_char2policy(c),
 			       dl1_access_fn, /* hit lat */cache_dl1_lat);
-    
     //TODO: mshr_create 추가
-
-      /* is the level 2 D-cache defined? */
-      if (!mystricmp(cache_dl2_opt, "none"))
+      if (sscanf(mshr_opt, "%[^:]:%d:%d:%d:%c",
+		 name, &nsets, &bsize, &assoc, &c) != 5)
+	fatal("bad mshr parms: <name>:<nsets>:<bsize>:<assoc>:<repl>");
+      mshr = mshr_create(name, nsets, bsize, /* mem_access_fn */mshr_access_fn);
+      if (sscanf(cache_dl2_opt, "%[^:]:%d:%d:%d:%c",
+		 name, &nsets, &bsize, &assoc, &c) != 5)
 	cache_dl2 = NULL;
       else
 	{

@@ -2,6 +2,7 @@
     "files.associations": {
         "sim.h": "c",
         "memory.h": "c",
-        "*.def": "c"
+        "*.def": "c",
+        "ios": "c"
     }
 }
