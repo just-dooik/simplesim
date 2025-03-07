@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug with gdbserver",
+            "name": "Debug SimpleSim",
             "type": "cppdbg",
             "request": "launch",
             "program": "/home/dooik1005/simplesim-3.0/sim-outorder",
@@ -12,7 +12,7 @@
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
-            "miDebuggerPath": "/usr/bin/gdb",   
+            "miDebuggerPath": "/usr/bin/gdb",
             "miDebuggerServerAddress": "localhost:2345",
             "setupCommands": [
                 {
