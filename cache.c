@@ -529,8 +529,9 @@ cache_access(struct cache_t *cp,	/* cache to access */
 
   /* permissions are checked on cache misses */
 
-  /* 여기서 mshr을 우선적으로 확인. 존재시 시간 체크 후 합쳐버리기 or hit(ready로 상태 업데이트)
-     즉 이미 ready 상태이지만 자료구조상에는 pending으로 되어있음을 허용 */
+  /* 여기서 mshr을 우선적으로 확인(mshr_lookup 호출)
+   * 합칠수 있을시 return 0
+   */
 
   /* check for a fast hit: access to same block */
   if (CACHE_TAGSET(cp, addr) == cp->last_tagset)
@@ -568,6 +569,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   /* cache block not found */
 
   /* **MISS** */
+  /* miss 처리 후 mshr_insert */
   cp->misses++;
 
   /* select the appropriate block to replace, and re-link this entry to

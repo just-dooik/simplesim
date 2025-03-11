@@ -22,7 +22,10 @@ extern struct cache_t *cache_dl1;  // 추가
   ((addr) & ~(mshr)->blk_mask)
 /* check if the mshr is full */
 #define MSHR_IS_FULL(mshr) \
-  ((mshr)->nvalid == (mshr)->nentries)  
+  ((mshr)->nvalid == (mshr)->nentries)
+/* check if the mshr is empty */
+#define MSHR_IS_EMPTY(mshr) \
+  ((mshr)->nvalid == 0)
 /* check if the entry is full */
 #define MSHR_ENTRY_IS_FULL(mshr, entry) \
   ((mshr)->nvalid_entries == (mshr)->nentries)
@@ -122,7 +125,7 @@ mshr_lookup(
     if(entry->status & MSHR_ENTRY_VALID && entry->block_addr == block_addr) 
       return entry;
     }
-    if(entry->status & ~MSHR_ENTRY_VALID) {
+  if(entry->status & ~MSHR_ENTRY_VALID) {
       entry_dirty = entry;
   } 
   /* if not found, return the last dirty entry */
@@ -194,6 +197,8 @@ mshr_free_entry(
 
 
 /* memory request send function */
+/* TODO: latency를 여기서 처리할게 아니라
+ * cache_access에서 mshr에 등록할때 병합대상의 남은 시간만큼을 리턴해야할듯? */
 unsigned int 
 mshr_send_request(
   struct mshr_t *mshr, 
@@ -279,4 +284,21 @@ mshr_dump(struct mshr_t *mshr, FILE *stream)
     }
   }
   fprintf(stream, "\n");
+}
+
+// 이 함수를 global time이 업데이트 될때마다 호출
+void
+mshr_update(struct mshr_t* mshr, tick_t now) {
+  /* if mshr is empty, return */
+  if (MSHR_IS_EMPTY(mshr)) {
+    return;
+  }
+
+  struct mshr_entry_t* entry; // using for loop
+
+  /* check if the entry is ready */
+  for (entry = mshr->entries; entry != mshr->entries + mshr->nentries; entry++) {
+    /* 각 엔트리, 블럭을 순회하며 now와 requested_time + mem_latancy(mshr_send_request)
+     * 와 비교하여 status 업데이트 */
+  }
 }

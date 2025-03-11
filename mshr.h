@@ -28,6 +28,7 @@ struct mshr_blk_t {
   md_addr_t offset; /* offset */  
   struct RUU_station *dest; /* destination, only pointer is stored so forward declaration is used */
   tick_t request_time; /* time of requested */
+  int lat; /* latency, maybe memory */
 };
 
 /* MSHR entry structure */
@@ -125,6 +126,13 @@ void
 mshr_dump(
   struct mshr_t *mshr,
   FILE *stream
+);
+
+/* 매 사이클마다 status를 업데이트해줄 함수가 필요함 */
+void
+mshr_update(
+  struct mshr_t* mshr,
+  tick_t now
 );
 
 #endif // !MSHR_H
