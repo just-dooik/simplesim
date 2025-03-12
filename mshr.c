@@ -108,26 +108,16 @@ mshr_lookup(
     return NULL;
   }
   
-  /* get the block address */
   md_addr_t block_addr = MSHR_BLK_ADDR(mshr, addr);
   
-  struct mshr_entry_t *entry = NULL; // using for loop
-  struct mshr_entry_t *entry_dirty = NULL; // last dirty entry
+  struct mshr_entry_t *entry = NULL;
 
-  /* check if the entry is valid */
   for(entry = mshr->entries; entry != mshr->entries + mshr->nentries; entry++) {
-    if(entry->status & MSHR_ENTRY_VALID && entry->block_addr == block_addr) 
+    if(entry->status & MSHR_ENTRY_VALID && entry->block_addr == block_addr) {
       return entry;
-    if(entry->status & ~MSHR_ENTRY_VALID)
-      entry_dirty = entry;
+    }
   }
-  /* if not found, return the last dirty entry */
-  if(entry_dirty) {
-    entry_dirty->status |= MSHR_ENTRY_VALID;
-    entry_dirty->block_addr = block_addr;
-    return entry_dirty;
-  }
-  /* if not found, return NULL */
+
   return NULL;
 }
 
