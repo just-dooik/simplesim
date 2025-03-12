@@ -25,7 +25,7 @@ struct mshr_t *mshr = NULL;
   ((mshr)->nvalid == 0)
 /* check if the entry is full */
 #define MSHR_ENTRY_IS_FULL(mshr, entry) \
-  ((mshr)->nvalid_entries == (mshr)->nentries)
+  ((entry)->nvalid == (mshr)->nblks) 
 /* check if the entry is valid */
 #define MSHR_ENTRY_IS_VALID(mshr, entry) \
   ((entry)->status & MSHR_ENTRY_VALID)
@@ -129,33 +129,38 @@ mshr_insert(
   tick_t now
 )
 {
-  struct mshr_entry_t *entry;
-  struct mshr_blk_t *blk;
+  struct mshr_entry_t *entry = NULL;
+  struct mshr_blk_t *blk = NULL;
 
   entry = mshr_lookup(mshr, addr);
-  if (!entry) {
+
+  if(entry && entry->status & MSHR_ENTRY_FULL) 
+    return NULL; // 모든 entry가 유효함(stall 해야 하는 상황)
+  if(!entry) {
     /* 새 entry 할당 */
-    entry = &mshr->entries[mshr->nvalid++];
-    if (!entry) 
-      return NULL;
-    
-    /* 메모리 요청 전송 */
-    if (entry->status & ~MSHR_ENTRY_PENDING) {
+    for(entry = mshr->entries; entry != mshr->entries + mshr->nentries; entry++) {
+      if(!(entry->status & MSHR_ENTRY_VALID)) {
+        entry->nvalid = 0;
+        entry->status |= MSHR_ENTRY_VALID;  
+        entry->block_addr = MSHR_BLK_ADDR(mshr, addr);  
+        mshr->nvalid++;
+        break;
+      }
+    }
+    if(entry == mshr->entries + mshr->nentries) {
+      return NULL; // 모든 entry가 유효함(stall 해야 하는 상황)
     }
   }
-
   /* 블록 추가 */
-  if (entry && entry->nvalid < mshr->nblks) { // if entry is valid and not full
-    blk = &entry->blk[entry->nvalid++];
-    blk->status &= ~MSHR_BLOCK_VALID;
-    blk->offset = MSHR_BLK_OFFSET(mshr, addr);
-    blk->request_time = now;
-    blk->status |= MSHR_BLOCK_VALID;
-    if (MSHR_ENTRY_IS_FULL(mshr, entry)) { // entry is full
-    }
-  }
+  blk = &entry->blk[entry->nvalid++];
+  blk->offset = MSHR_BLK_OFFSET(mshr, addr);
+  blk->request_time = now;
+  blk->status |= MSHR_BLOCK_VALID;
+  
+  if(MSHR_ENTRY_IS_FULL(mshr, entry))
+    entry->status |= MSHR_ENTRY_FULL; 
 
-  return entry; // return valid entry, if not valid, return NULL
+  return entry; // return valid entry
 }
 
 /* free entry 
