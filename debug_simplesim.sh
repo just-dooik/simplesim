@@ -10,6 +10,15 @@ SIMPLESIM_BIN="$SIMPLESIM_DIR/sim-outorder"
 TEST_DIR="$SIMPLESIM_DIR/tests-alpha/bin"
 GDB_PORT="2345"
 
+# make 실행
+cd $SIMPLESIM_DIR
+make
+if [ $? -ne 0 ]; then
+    echo "make 실행 중 오류가 발생했습니다."
+    exit 1
+fi  
+cd -
+
 # 인자 확인
 if [ $# -lt 1 ]; then
     echo "사용법: $0 [벤치마크 프로그램] [입력 파일]"

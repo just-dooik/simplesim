@@ -57,6 +57,7 @@
 #include "misc.h"
 #include "machine.h"
 #include "cache.h"
+#include "mshr.h"
 
 /* cache access macros */
 #define CACHE_TAG(cp, addr)	((addr) >> (cp)->tag_shift)
@@ -138,6 +139,8 @@
 
 /* bound sqword_t/dfloat_t to positive int */
 #define BOUND_POS(N)		((int)(MIN(MAX(0, (N)), 2147483647)))
+
+extern struct mshr_t *mshr;
 
 /* unlink BLK from the hash table bucket chain in SET */
 static void
@@ -533,6 +536,9 @@ cache_access(struct cache_t *cp,	/* cache to access */
    * 합칠수 있을시 return 0
    */
 
+  /* mshr 처리 */
+  if(strcmp(cp->name, "ul2") == 0) goto mshr_routine;
+
   /* check for a fast hit: access to same block */
   if (CACHE_TAGSET(cp, addr) == cp->last_tagset)
     {
@@ -569,7 +575,6 @@ cache_access(struct cache_t *cp,	/* cache to access */
   /* cache block not found */
 
   /* **MISS** */
-  /* miss 처리 후 mshr_insert */
   cp->misses++;
 
   /* select the appropriate block to replace, and re-link this entry to
@@ -722,6 +727,17 @@ cache_access(struct cache_t *cp,	/* cache to access */
 
   /* return first cycle data is available to access */
   return (int) MAX(cp->hit_latency, (blk->ready - now));
+
+/* mshr 처리 */
+ mshr_routine:
+
+  if(mshr_lookup(mshr, addr)) {
+    /* hit */ 
+    mshr_insert(mshr, addr, now);
+    mshr_dump(mshr, stdout);  
+  } else {
+    /* miss */
+  }
 }
 
 /* return non-zero if block containing address ADDR is contained in cache

@@ -4,11 +4,8 @@
 #include "mshr.h"   
 #include "memory.h" /* for enum mem_cmd */
 #include "machine.h" /* for enum md_opcode */
-#include "cache.h"  // for cache_access
-#include "sim-outorder.h" // for RUU_station definition
 
-extern struct cache_t *cache_dl1;  // 추가
-
+struct mshr_t *mshr = NULL;
 /*
 * MSHR macros
 * simplescalar simulator goals to be faster, so we define some macros to speed up the code
@@ -38,15 +35,12 @@ extern struct cache_t *cache_dl1;  // 추가
 struct mshr_t *
 mshr_create(
   int bsize, /* block size */
-  int nentries, /* number of entries*/
-  int nblks, /* number of blocks for each entry*/
-  mshr_mem_access_fn mem_access_fn
+  int nentries, /* number of entries */
+  int nblks /* number of blocks for each entry */
 )
 {
-  struct mshr_t *mshr;
-
   mshr = (struct mshr_t *)
-    calloc(1, sizeof(struct mshr_t) + (nentries-1) * sizeof(struct mshr_entry_t));
+    calloc(1, sizeof(struct mshr_t));
   if(!mshr)
     fatal("out of virtual memory");
 
@@ -54,11 +48,15 @@ mshr_create(
   mshr->nblks = nblks;
   mshr->bsize = bsize;
   mshr->nvalid_entries = 0;
+  mshr->nvalid = 0;
+
 
   /* set the block mask and shift same as cache for efficient decoding */
-  mshr->blk_mask = (1 << bsize) - 1;
-  mshr->blk_shift = (int)log2(mshr->blk_mask);
-
+  // 수정: 블록 마스크와 블록 시프트를 캐시와 동일하게 설정 
+  mshr->blk_mask = bsize - 1;
+  mshr->blk_shift = log_base2(bsize);
+  // printf("bsize = %d\n", bsize);
+  // printf("mshr->blk_mask: %d, mshr->blk_shift: %d\n", mshr->blk_mask, mshr->blk_shift); 
 
   /* allocate entries */
   mshr->entries = (struct mshr_entry_t *)
@@ -74,9 +72,6 @@ mshr_create(
       fatal("out of virtual memory");
   }
 
-  /* 메모리 접근 함수 설정 */
-  mshr->mem_access_fn = mem_access_fn;
-
   /* initialize entries */
   for(int i = 0; i < nentries; i++) {
     mshr->entries[i].status = 0; 
@@ -89,7 +84,6 @@ mshr_create(
     for(int j = 0; j < nblks; j++) {
       mshr->entries[i].blk[j].status = 0;
       mshr->entries[i].blk[j].offset = 0;
-      mshr->entries[i].blk[j].dest = NULL;
     }
   } 
 
@@ -105,7 +99,7 @@ mshr_create(
 */
 struct mshr_entry_t *
 mshr_lookup(
-  struct mshr_t *mshr, 
+  struct mshr_t *mshr,
   md_addr_t addr /* address */
 )
 { 
@@ -117,17 +111,16 @@ mshr_lookup(
   /* get the block address */
   md_addr_t block_addr = MSHR_BLK_ADDR(mshr, addr);
   
-  struct mshr_entry_t *entry; // using for loop
-  struct mshr_entry_t *entry_dirty; // last dirty entry
+  struct mshr_entry_t *entry = NULL; // using for loop
+  struct mshr_entry_t *entry_dirty = NULL; // last dirty entry
 
   /* check if the entry is valid */
   for(entry = mshr->entries; entry != mshr->entries + mshr->nentries; entry++) {
     if(entry->status & MSHR_ENTRY_VALID && entry->block_addr == block_addr) 
       return entry;
-    }
-  if(entry->status & ~MSHR_ENTRY_VALID) {
+    if(entry->status & ~MSHR_ENTRY_VALID)
       entry_dirty = entry;
-  } 
+  }
   /* if not found, return the last dirty entry */
   if(entry_dirty) {
     entry_dirty->status |= MSHR_ENTRY_VALID;
@@ -143,7 +136,6 @@ struct mshr_entry_t *
 mshr_insert(
   struct mshr_t *mshr,
   md_addr_t addr,
-  struct RUU_station *rs,
   tick_t now
 )
 {
@@ -159,7 +151,6 @@ mshr_insert(
     
     /* 메모리 요청 전송 */
     if (entry->status & ~MSHR_ENTRY_PENDING) {
-      unsigned int lat = mshr_send_request(mshr, entry, now);
     }
   }
 
@@ -168,7 +159,6 @@ mshr_insert(
     blk = &entry->blk[entry->nvalid++];
     blk->status &= ~MSHR_BLOCK_VALID;
     blk->offset = MSHR_BLK_OFFSET(mshr, addr);
-    blk->dest = rs;
     blk->request_time = now;
     blk->status |= MSHR_BLOCK_VALID;
     if (MSHR_ENTRY_IS_FULL(mshr, entry)) { // entry is full
@@ -199,54 +189,6 @@ mshr_free_entry(
 /* memory request send function */
 /* TODO: latency를 여기서 처리할게 아니라
  * cache_access에서 mshr에 등록할때 병합대상의 남은 시간만큼을 리턴해야할듯? */
-unsigned int 
-mshr_send_request(
-  struct mshr_t *mshr, 
-  struct mshr_entry_t *entry, 
-  tick_t now
-)
-{
-  unsigned int lat;
-
-  lat = mshr->mem_access_fn(Read, entry->block_addr, mshr->bsize, entry, now);
-
-  entry->status |= MSHR_ENTRY_PENDING;
-  return lat;
-}
-
-/* memory request complete function 
-* complete the memory request and update the entry status 
-* send the data to the destined LSQ station
-*/
-void 
-mshr_complete_request(
-  struct mshr_t *mshr, 
-  struct mshr_entry_t *entry, 
-  byte_t *data, 
-  tick_t now
-)
-{
-  cache_access(
-    cache_dl1,  // mshr->cache 대신 cache_dl1 사용
-    Write,
-    entry->block_addr,
-    data,
-    mshr->bsize,
-    now,
-    NULL, NULL
-  );
-
-  /* set the completed status of the destination station */
-  for(int i = 0; i < entry->nvalid; i++) {
-    struct mshr_blk_t *blk = &entry->blk[i];
-    if(blk->status & MSHR_BLOCK_VALID) {
-      struct RUU_station *dest = blk->dest;
-      dest->completed = 1; // TRUE -> 1
-    }
-  }
-
-  mshr_free_entry(mshr, entry); // free the entry
-}
 
 void
 mshr_dump(struct mshr_t *mshr, FILE *stream)
@@ -280,7 +222,6 @@ mshr_dump(struct mshr_t *mshr, FILE *stream)
               blk->status,
               (blk->status & MSHR_BLOCK_VALID) ? "(valid)" : "");
       fprintf(stream, "      offset: 0x%08llx\n", blk->offset);
-      fprintf(stream, "      dest: %p\n", (void*)blk->dest);
     }
   }
   fprintf(stream, "\n");

@@ -388,7 +388,7 @@ struct cache_t *cache_dl1 = NULL;  // static 제거, 전역 변수로 선언
 static struct cache_t *cache_dl2;
 
 /* added: mshr */
-static struct mshr_t *mshr;
+extern struct mshr_t *mshr;
 
 /* instruction TLB */
 static struct cache_t *itlb;
@@ -1049,11 +1049,12 @@ sim_check_options(struct opt_odb_t *odb,        /* options database */
       cache_dl1 = cache_create(name, nsets, bsize, /* balloc */FALSE,
 			       /* usize */0, assoc, cache_char2policy(c),
 			       dl1_access_fn, /* hit lat */cache_dl1_lat);
-    //TODO: mshr_create 추가
+    
+    //mshr_create 추가
       if (sscanf(mshr_opt, "%[^:]:%d:%d:%d:%c",
 		 name, &nsets, &bsize, &assoc, &c) != 5)
 	fatal("bad mshr parms: <name>:<nsets>:<bsize>:<assoc>:<repl>");
-      mshr = mshr_create(bsize, nsets, assoc, mshr_access_fn);
+      mshr = mshr_create(bsize, nsets, assoc);
       if (sscanf(cache_dl2_opt, "%[^:]:%d:%d:%d:%c",
 		 name, &nsets, &bsize, &assoc, &c) != 5)
 	cache_dl2 = NULL;
@@ -1392,11 +1393,11 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
   {
     stat_reg_counter(sdb, "mshr.accesses",
                     "total number of MSHR accesses",
-                    &mshr->nvalid, 0, NULL);
+                    &mshr->nvalid, mshr->nvalid, NULL);
     
     stat_reg_counter(sdb, "mshr.hits",
                     "total number of MSHR hits",
-                    &mshr->nvalid_entries, 0, NULL);
+                    &mshr->nvalid_entries, mshr->nvalid_entries, NULL);
     
     stat_reg_formula(sdb, "mshr.misses",
                     "total number of MSHR misses",
@@ -1404,7 +1405,7 @@ sim_reg_stats(struct stat_sdb_t *sdb)   /* stats database */
     
     stat_reg_counter(sdb, "mshr.full",
                     "number of times MSHR was full",
-                    &mshr->nentries, 0, NULL);
+                    &mshr->nentries, mshr->nentries, NULL);
     
     stat_reg_formula(sdb, "mshr.miss_rate",
                     "MSHR miss rate (misses/ref)",
@@ -2203,8 +2204,8 @@ ruu_commit(void)
       if (!rs->completed)
 	{
 	  /* at least RUU entry must be complete */
-	  break;
-	}
+        break;
+      }
 
       /* default commit events */
       events = 0;

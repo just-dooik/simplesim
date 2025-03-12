@@ -287,14 +287,16 @@ SRCS =	main.c sim-fast.c sim-safe.c sim-cache.c sim-profile.c \
 	target-pisa/pisa.c target-pisa/loader.c target-pisa/syscall.c \
 	target-pisa/symbol.c \
 	target-alpha/alpha.c target-alpha/loader.c target-alpha/syscall.c \
-	target-alpha/symbol.c
+	target-alpha/symbol.c \
+	mshr.c
 
 HDRS =	syscall.h memory.h regs.h sim.h loader.h cache.h bpred.h ptrace.h \
 	eventq.h resource.h endian.h dlite.h symbol.h eval.h bitmap.h \
 	eio.h range.h version.h endian.h misc.h \
 	target-pisa/pisa.h target-pisa/pisabig.h target-pisa/pisalittle.h \
 	target-pisa/pisa.def target-pisa/ecoff.h \
-	target-alpha/alpha.h target-alpha/alpha.def target-alpha/ecoff.h
+	target-alpha/alpha.h target-alpha/alpha.def target-alpha/ecoff.h \
+	mshr.h
 
 #
 # common objects
@@ -389,8 +391,8 @@ sim-bpred$(EEXT):	sysprobe$(EEXT) sim-bpred.$(OEXT) bpred.$(OEXT) $(OBJS) libexo
 sim-cheetah$(EEXT):	sysprobe$(EEXT) sim-cheetah.$(OEXT) $(OBJS) libcheetah/libcheetah.$(LEXT) libexo/libexo.$(LEXT)
 	$(CC) -o sim-cheetah$(EEXT) $(CFLAGS) sim-cheetah.$(OEXT) $(OBJS) libcheetah/libcheetah.$(LEXT) libexo/libexo.$(LEXT) $(MLIBS)
 
-sim-cache$(EEXT):	sysprobe$(EEXT) sim-cache.$(OEXT) cache.$(OEXT) $(OBJS) libexo/libexo.$(LEXT)
-	$(CC) -o sim-cache$(EEXT) $(CFLAGS) sim-cache.$(OEXT) cache.$(OEXT) $(OBJS) libexo/libexo.$(LEXT) $(MLIBS)
+sim-cache$(EEXT):	sysprobe$(EEXT) sim-cache.$(OEXT) cache.$(OEXT) mshr.$(OEXT) $(OBJS) libexo/libexo.$(LEXT)
+	$(CC) -o sim-cache$(EEXT) $(CFLAGS) sim-cache.$(OEXT) cache.$(OEXT) mshr.$(OEXT) $(OBJS) libexo/libexo.$(LEXT) $(MLIBS)
 
 sim-outorder$(EEXT):	sysprobe$(EEXT) sim-outorder.$(OEXT) cache.$(OEXT) bpred.$(OEXT) resource.$(OEXT) ptrace.$(OEXT) mshr.$(OEXT) $(OBJS) libexo/libexo.$(LEXT)
 	$(CC) -o sim-outorder$(EEXT) $(CFLAGS) sim-outorder.$(OEXT) cache.$(OEXT) bpred.$(OEXT) resource.$(OEXT) ptrace.$(OEXT) mshr.$(OEXT) $(OBJS) libexo/libexo.$(LEXT) $(MLIBS)

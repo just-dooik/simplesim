@@ -26,9 +26,7 @@ struct cache_t;
 struct mshr_blk_t {
   unsigned int status; /* MSHR block status(valid, dirty) */
   md_addr_t offset; /* offset */  
-  struct RUU_station *dest; /* destination, only pointer is stored so forward declaration is used */
   tick_t request_time; /* time of requested */
-  int lat; /* latency, maybe memory */
 };
 
 /* MSHR entry structure */
@@ -38,15 +36,9 @@ struct mshr_entry_t {
   unsigned int status; /* mshr entry status(valid, dirty)  */
   md_addr_t block_addr; /* block address */
   int nvalid; /* number of valid blocks */
+  int completed_time;
+  int lat; /* latency */
 };
-
-/* memory access function type, like cache's blk_access_fn */
-typedef unsigned int
-(*mshr_mem_access_fn)(enum mem_cmd cmd,     /* Read or Write */
-                      md_addr_t addr,        /* block address */
-                      int bsize,             /* block size */
-                      struct mshr_entry_t *entry,
-                      tick_t now);           /* current time */
 
 /* MSHR structure */
 struct mshr_t {
@@ -56,14 +48,12 @@ struct mshr_t {
   int nvalid; /* number of valid entries */
   int bsize; /* block size */ 
   int nvalid_entries; /* number of valid entries */
-
   /* derived data, for fast decoding */
-  md_addr_t blk_mask; /* block mask */
+  int blk_mask; /* block mask */
   int blk_shift; /* block shift */
 
   /* memory access function */
   struct cache_t *cache;  /* associated cache */
-  mshr_mem_access_fn mem_access_fn;
   unsigned int mem_lat;
 
   /* statistics */
@@ -78,8 +68,7 @@ struct mshr_t *
 mshr_create(
   int bsize, /* block size */
   int nentries, /* number of entries */
-  int nblks, /* number of blocks for each entry */
-  mshr_mem_access_fn mem_access_fn
+  int nblks /* number of blocks for each entry */
 );
 
 /* lookup mshr */
@@ -94,7 +83,6 @@ struct mshr_entry_t *
 mshr_insert(  
   struct mshr_t *mshr,
   md_addr_t addr,
-  struct RUU_station *dest,
   tick_t now
 );
 

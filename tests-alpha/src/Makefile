@@ -1,25 +1,27 @@
-CC=cc
-CFLAGS=-O5 -non_shared
+CC = cc -O5 -fno-shared
 
-all: anagram test-printf test-fmath test-math test-llong test-lswlr
+all: anagram test-printf test-fmath test-math test-llong test-lswlr test-dl2
+
+test: test-dl2.c
+	$(CC) -o test-dl2 test-dl2.c
 
 anagram: anagram.c
-	$(CC) $(CFLAGS) -o anagram anagram.c
+	$(CC) -o anagram anagram.c
 
 test-printf: test-printf.c
-	$(CC) $(CFLAGS) -o test-printf test-printf.c -lm
+	$(CC) -o test-printf test-printf.c -lm
 
 test-fmath: test-fmath.c
-	$(CC) $(CFLAGS) -o test-fmath test-fmath.c -lm
+	$(CC) -o test-fmath test-fmath.c -lm
 
 test-math: test-math.c
-	$(CC) $(CFLAGS) -o test-math test-math.c -lm
+	$(CC) -o test-math test-math.c -lm
 
 test-llong: test-llong.c
-	$(CC) $(CFLAGS) -o test-llong test-llong.c
+	$(CC) -o test-llong test-llong.c
 
 test-lswlr: test-lswlr.c
-	$(CC) $(CFLAGS) -o test-lswlr test-lswlr.c
+	$(CC) -o test-lswlr test-lswlr.c
 
 test:	all
 	../simplesim-0.1/sim-safe anagram words < input.txt
