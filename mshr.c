@@ -147,9 +147,6 @@ mshr_insert(
         break;
       }
     }
-    if(entry == mshr->entries + mshr->nentries) {
-      return NULL; // 모든 entry가 유효함(stall 해야 하는 상황)
-    }
   }
   /* 블록 추가 */
   blk = &entry->blk[entry->nvalid++];
