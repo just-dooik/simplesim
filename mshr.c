@@ -148,6 +148,9 @@ mshr_insert(
       }
     }
   }
+  if(entry == NULL) {
+    return NULL; // 모든 entry가 유효함(stall 해야 하는 상황)
+  }
   /* 블록 추가 */
   blk = &entry->blk[entry->nvalid++];
   blk->offset = MSHR_BLK_OFFSET(mshr, addr);
