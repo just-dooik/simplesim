@@ -430,17 +430,6 @@ mem_access_latency(int blk_sz)		/* block size accessed */
 	  (/* remainder chunk latency */mem_lat[1] * (chunks - 1)));
 }
 
-/* cache miss handler function for mshr */
-static unsigned int
-mshr_access_fn(enum mem_cmd cmd,
-	       md_addr_t baddr,
-	       int bsize,
-         struct mshr_entry_t *entry,
-	       tick_t now)
-{
-  return mem_access_latency(bsize);
-}
-
 /*
  * cache miss handlers
  */

@@ -163,21 +163,22 @@ mshr_insert(
   return entry; // return valid entry
 }
 
-/* free entry 
- * flushing entry due to misspeculation
-*/
+/* free entry */
 void
 mshr_free_entry(
   struct mshr_t *mshr, 
   struct mshr_entry_t *entry
 )
 {
-  for(int i = 0; i < entry->nvalid; i++) {
-    struct mshr_blk_t *blk = &entry->blk[i];
+  struct mshr_blk_t *blk = NULL;
+
+  for(blk = entry->blk; blk != entry->blk + entry->nvalid; blk++) {
     blk->status &= ~MSHR_BLOCK_VALID; // clear the valid status
   }
-  entry->nvalid = 0; // clear the number of valid blocks  
+  
+  entry->nvalid = 0;
   entry->status &= ~MSHR_ENTRY_VALID; // clear the valid status
+  mshr->nvalid--;
 }
 
 

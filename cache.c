@@ -537,7 +537,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
    */
 
   /* mshr 처리 */
-  if(strcmp(cp->name, "ul2") == 0) goto mshr_routine;
+  // if(strcmp(cp->name, "ul2") == 0) goto mshr_routine;
 
   /* check for a fast hit: access to same block */
   if (CACHE_TAGSET(cp, addr) == cp->last_tagset)
@@ -729,15 +729,16 @@ cache_access(struct cache_t *cp,	/* cache to access */
   return (int) MAX(cp->hit_latency, (blk->ready - now));
 
 /* mshr 처리 */
- mshr_routine:
+//  mshr_routine:
 
-  if(mshr_lookup(mshr, addr)) {
-    /* hit */ 
-    mshr_insert(mshr, addr, now);
-    mshr_dump(mshr, stdout);  
-  } else {
-    /* miss */
-  }
+//   if(mshr_lookup(mshr, addr)) {
+//     /* hit */ 
+//     mshr_insert(mshr, addr, now);
+    
+    
+//   } else {
+//     /* miss */
+//   }
 }
 
 /* return non-zero if block containing address ADDR is contained in cache
