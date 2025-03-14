@@ -59,7 +59,10 @@
 #include "cache.h"
 #include "mshr.h"
 
-static struct miss_queue_entry *miss_queue; // 미스 큐 포인터(힙으로 관리)
+static struct miss_queue_entry *miss_queue = NULL; // 미스 큐 포인터(힙으로 관리)
+
+#define parent(i) ((i - 1) / 2)
+
 
 /* cache access macros */
 #define CACHE_TAG(cp, addr)	((addr) >> (cp)->tag_shift)
@@ -912,4 +915,91 @@ miss_queue_heapify(struct miss_queue_heap *heap, int i) {
   }
 }
 
+void
+miss_queue_insert(struct miss_queue_heap *heap, struct miss_queue_entry *entry) {
+  heap->entries[heap->size++] = *entry;
+  int i = heap->size - 1;
+  while (i > 0 && heap->entries[parent(i)].ready_time > heap->entries[i].ready_time) {
+    miss_queue_swap(heap, parent(i), i);
+    i = parent(i);
+  }
+}
 
+void
+miss_queue_extract_min(struct miss_queue_heap *heap, struct miss_queue_entry *entry) {
+  if (heap->size == 0) {
+    return;
+  }
+  
+  *entry = heap->entries[0];
+  heap->entries[0] = heap->entries[--heap->size];
+  miss_queue_heapify(heap, 0);  
+
+  struct cache_t *cp = entry->cp;
+  struct cache_blk_t *blk = entry->repl;
+  md_addr_t addr = entry->addr;
+  int bofs = entry->bofs;
+  int nbytes = entry->nbytes;
+  tick_t now = entry->ready_time;
+  byte_t **udata = entry->udata;
+  md_addr_t *repl_addr = entry->repl_addr;
+  md_addr_t tag = entry->tag;
+  md_addr_t set = entry->set;
+  int valid = entry->valid;
+
+  blk->status &= ~CACHE_BLK_VALID;  
+  blk->status |= CACHE_BLK_DIRTY;
+
+  cp->writebacks++;
+  cp->blk_access_fn(Write, CACHE_MK_BADDR(cp, tag, set), cp->bsize, blk, now);
+
+  if (udata) {  
+    *udata = blk->user_data;
+  }
+
+  *repl_addr = CACHE_BADDR(cp, addr);
+  blk->ready = now + cp->hit_latency;
+  blk->status &= ~CACHE_BLK_DIRTY;  
+
+  if (cp->hsize) {
+    int hindex = CACHE_HASH(cp, tag);
+    struct cache_blk_t *prev = NULL;
+    for (struct cache_blk_t *curr = cp->sets[set].hash[hindex]; curr; curr = curr->hash_next) {
+      if (curr->tag == tag) {
+        if (prev) {
+          prev->hash_next = curr->hash_next;
+        } else {
+          cp->sets[set].hash[hindex] = curr->hash_next;
+        }
+        break;
+      }
+      prev = curr;
+    }
+  } else {
+    struct cache_blk_t *prev = NULL;
+    for (struct cache_blk_t *curr = cp->sets[set].way_head; curr; curr = curr->way_next) {
+      if (curr->tag == tag) {
+        if (prev) {
+          prev->way_next = curr->way_next;
+        } else {  
+          cp->sets[set].way_head = curr->way_next;    
+        }
+        break;
+      }
+      prev = curr;
+    }
+  }
+
+  if (valid) {
+    miss_queue_insert(heap, entry);
+  } else {
+    free(entry);
+  }
+}   
+
+void
+miss_queue_init(struct miss_queue_heap *heap, int capacity) {
+  heap->entries = (struct miss_queue_entry *)malloc(capacity * sizeof(struct miss_queue_entry));
+  heap->size = 0;
+  heap->capacity = capacity;
+}

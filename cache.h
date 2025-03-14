@@ -329,4 +329,14 @@ miss_queue_swap(struct miss_queue_heap *heap, int i, int j);
 void
 miss_queue_heapify(struct miss_queue_heap *heap, int i);
 
+void
+miss_queue_insert(struct miss_queue_heap *heap, struct miss_queue_entry *entry);
+
+void
+miss_queue_extract_min(struct miss_queue_heap *heap, struct miss_queue_entry *entry);
+
+void
+miss_queue_init(struct miss_queue_heap *heap, int capacity);
+
 #endif /* CACHE_H */
+
