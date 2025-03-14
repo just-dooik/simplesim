@@ -59,6 +59,8 @@
 #include "cache.h"
 #include "mshr.h"
 
+static struct miss_queue_entry *miss_queue; // 미스 큐 포인터(힙으로 관리)
+
 /* cache access macros */
 #define CACHE_TAG(cp, addr)	((addr) >> (cp)->tag_shift)
 #define CACHE_SET(cp, addr)	(((addr) >> (cp)->set_shift) & (cp)->set_mask)
