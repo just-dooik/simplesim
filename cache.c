@@ -884,6 +884,30 @@ cache_flush_addr(struct cache_t *cp,	/* cache instance to flush */
 }
 
 void
-cache_update(struct cache_t *cp, tick_t now) {
-   
+miss_queue_swap(struct miss_queue_heap *heap, int i, int j) {
+  struct miss_queue_entry *tmp = &heap->entries[i];
+  heap->entries[i] = heap->entries[j];
+  heap->entries[j] = *tmp;
 }
+
+void 
+miss_queue_heapify(struct miss_queue_heap *heap, int i) {
+  int left = 2 * i + 1;
+  int right = 2 * i + 2;
+  int smallest = i;
+
+  if (left < heap->size && heap->entries[left].ready_time < heap->entries[smallest].ready_time) {
+    smallest = left;
+  }
+
+  if (right < heap->size && heap->entries[right].ready_time < heap->entries[smallest].ready_time) {
+    smallest = right;
+  } 
+
+  if (smallest != i) {  
+    miss_queue_swap(heap, i, smallest);
+    miss_queue_heapify(heap, smallest);
+  }
+}
+
+
