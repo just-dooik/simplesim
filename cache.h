@@ -298,4 +298,35 @@ cache_flush_addr(struct cache_t *cp,	/* cache instance to flush */
 		 md_addr_t addr,	/* address of block to flush */
 		 tick_t now);		/* time of cache flush */
 
+/* 캐시 미스 요청을 저장할 구조체 */
+struct miss_queue_entry {
+  struct cache_t *cp;      /* 캐시 포인터 */
+  md_addr_t addr;          /* 요청 주소 */
+  enum mem_cmd cmd;        /* 명령 유형 */
+  void *p;                 /* 데이터 버퍼 */
+  int nbytes;              /* 크기 */
+  tick_t ready_time;       /* 완료 예정 시간 */
+  struct cache_blk_t *repl;/* 교체될 블록 */
+  byte_t **udata;          /* 사용자 데이터 */
+  md_addr_t *repl_addr;    /* 교체 주소 */
+  md_addr_t tag;           /* 태그 */
+  md_addr_t set;           /* 세트 번호 */
+  int bofs;                /* 블록 내 오프셋 */
+  int valid;               /* 유효 여부 */
+};
+
+/* 캐시 미스 큐 힙 */
+struct miss_queue_heap {
+  struct miss_queue_entry *entries;
+  int size;
+  int capacity;
+};
+
+void 
+miss_queue_swap(struct miss_queue_heap *heap, int i, int j);
+
+
+void
+miss_queue_heapify(struct miss_queue_heap *heap, int i);
+
 #endif /* CACHE_H */

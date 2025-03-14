@@ -4648,6 +4648,7 @@ sim_main(void)
 
       /* go to next cycle */
       sim_cycle++;
+      mshr_update(mshr, sim_cycle); 
 
       /* finish early? */
       if (max_insts && sim_num_insn >= max_insts)

@@ -1,9 +1,7 @@
 CC = cc -O5 -fno-shared
 
-all: anagram test-printf test-fmath test-math test-llong test-lswlr test-dl2
+all: anagram test-printf test-fmath test-math test-llong test-lswlr
 
-test: test-dl2.c
-	$(CC) -o test-dl2 test-dl2.c
 
 anagram: anagram.c
 	$(CC) -o anagram anagram.c

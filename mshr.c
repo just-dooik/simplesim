@@ -4,6 +4,7 @@
 #include "mshr.h"   
 #include "memory.h" /* for enum mem_cmd */
 #include "machine.h" /* for enum md_opcode */
+#include "cache.h"
 
 struct mshr_t *mshr = NULL;
 /*
@@ -148,9 +149,11 @@ mshr_insert(
       }
     }
   }
+
   if(entry == NULL) {
     return NULL; // 모든 entry가 유효함(stall 해야 하는 상황)
   }
+
   /* 블록 추가 */
   blk = &entry->blk[entry->nvalid++];
   blk->offset = MSHR_BLK_OFFSET(mshr, addr);
@@ -237,5 +240,8 @@ mshr_update(struct mshr_t* mshr, tick_t now) {
   for (entry = mshr->entries; entry != mshr->entries + mshr->nentries; entry++) {
     /* 각 엔트리, 블럭을 순회하며 now와 requested_time + mem_latancy(mshr_send_request)
      * 와 비교하여 status 업데이트 */
+    for(int i = 0; i < entry->nvalid; i++) {
+      
+    }
   }
 }

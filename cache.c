@@ -882,3 +882,8 @@ cache_flush_addr(struct cache_t *cp,	/* cache instance to flush */
   /* return latency of the operation */
   return lat;
 }
+
+void
+cache_update(struct cache_t *cp, tick_t now) {
+   
+}
