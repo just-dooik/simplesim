@@ -664,14 +664,14 @@ cache_access(struct cache_t *cp,	/* cache to access */
   return lat;
 
 cache_miss:
-  printf("cache_miss\n");
-  return miss_queue_insert(&miss_queue, cp, addr, cmd, p, nbytes, now, repl, udata, repl_addr, tag, set, bofs, cp->sets[set].way_tail->ready, now);
+  //printf("cache_miss\n");
+  return miss_queue_insert(miss_queue, cp, addr, cmd, p, nbytes, now, repl, 
+  udata, repl_addr, tag, set, bofs, cp->sets[set].way_tail->ready, now);
 
  cache_hit: /* slow hit handler */
 
   /* **HIT** */
-  cp->hits++;
-
+  cp->hits++;  
   /* copy data out of cache block, if block exists */
   if (cp->balloc)
     {
@@ -903,7 +903,7 @@ miss_queue_heapify(struct miss_queue_heap *heap, int i) {
 
 int
 miss_queue_insert(struct miss_queue_heap *heap, struct cache_t *cp, md_addr_t addr, enum mem_cmd cmd, void *p, int nbytes, tick_t ready_time, struct cache_blk_t *repl, byte_t **udata, md_addr_t *repl_addr, md_addr_t tag, md_addr_t set, int bofs, int valid, tick_t now) {
-  printf("miss_queue_insert\n");
+  //printf("miss_queue_insert\n");
   if (heap->size >= heap->capacity) {
     return -1;
   }
@@ -965,6 +965,7 @@ miss_queue_insert(struct miss_queue_heap *heap, struct cache_t *cp, md_addr_t ad
 
 void
 miss_queue_extract_min(struct miss_queue_heap *heap, tick_t now) {
+  //printf("miss_queue_extract_min\n"); 
   if (heap->size == 0) {
     return;
   }
