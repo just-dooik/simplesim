@@ -59,7 +59,7 @@
 #include "cache.h"
 #include "mshr.h"
 
-static struct miss_queue_entry *miss_queue = NULL; // 미스 큐 포인터(힙으로 관리)
+struct miss_queue_heap *miss_queue = NULL;
 
 #define parent(i) ((i - 1) / 2)
 
@@ -537,13 +537,6 @@ cache_access(struct cache_t *cp,	/* cache to access */
 
   /* permissions are checked on cache misses */
 
-  /* 여기서 mshr을 우선적으로 확인(mshr_lookup 호출)
-   * 합칠수 있을시 return 0
-   */
-
-  /* mshr 처리 */
-  // if(strcmp(cp->name, "ul2") == 0) goto mshr_routine;
-
   /* check for a fast hit: access to same block */
   if (CACHE_TAGSET(cp, addr) == cp->last_tagset)
     {
@@ -551,7 +544,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
       blk = cp->last_blk;
       goto cache_fast_hit;
     }
-    
+
   if (cp->hsize)
     {
       /* higly-associativity cache, access through the per-set hash tables */
@@ -582,7 +575,10 @@ cache_access(struct cache_t *cp,	/* cache to access */
   /* **MISS** */
   cp->misses++;
 
-  /* select the appropriate block to replace, and re-link this entry to
+  if ((strcmp(cp->name, "itlb") || strcmp(cp->name, "dtlb"))) {
+    goto cache_miss;
+  }
+/* select the appropriate block to replace, and re-link this entry to
      the appropriate place in the way list */
   switch (cp->policy) {
   case LRU:
@@ -615,13 +611,13 @@ cache_access(struct cache_t *cp,	/* cache to access */
 
       if (repl_addr)
 	*repl_addr = CACHE_MK_BADDR(cp, repl->tag, set);
- 
+
       /* don't replace the block until outstanding misses are satisfied */
       lat += BOUND_POS(repl->ready - now);
- 
+
       /* stall until the bus to next level of memory is available */
       lat += BOUND_POS(cp->bus_free - (now + lat));
- 
+
       /* track bus resource usage */
       cp->bus_free = MAX(cp->bus_free, (now + lat)) + 1;
 
@@ -667,9 +663,12 @@ cache_access(struct cache_t *cp,	/* cache to access */
   /* return latency of the operation */
   return lat;
 
+cache_miss:
+  printf("cache_miss\n");
+  return miss_queue_insert(&miss_queue, cp, addr, cmd, p, nbytes, now, repl, udata, repl_addr, tag, set, bofs, cp->sets[set].way_tail->ready, now);
 
  cache_hit: /* slow hit handler */
-  
+
   /* **HIT** */
   cp->hits++;
 
@@ -704,7 +703,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
   return (int) MAX(cp->hit_latency, (blk->ready - now));
 
  cache_fast_hit: /* fast hit handler */
-  
+
   /* **FAST HIT** */
   cp->hits++;
 
@@ -732,20 +731,7 @@ cache_access(struct cache_t *cp,	/* cache to access */
 
   /* return first cycle data is available to access */
   return (int) MAX(cp->hit_latency, (blk->ready - now));
-
-/* mshr 처리 */
-//  mshr_routine:
-
-//   if(mshr_lookup(mshr, addr)) {
-//     /* hit */ 
-//     mshr_insert(mshr, addr, now);
-    
-    
-//   } else {
-//     /* miss */
-//   }
 }
-
 /* return non-zero if block containing address ADDR is contained in cache
    CP, this interface is used primarily for debugging and asserting cache
    invariants */
@@ -915,91 +901,134 @@ miss_queue_heapify(struct miss_queue_heap *heap, int i) {
   }
 }
 
-void
-miss_queue_insert(struct miss_queue_heap *heap, struct miss_queue_entry *entry) {
-  heap->entries[heap->size++] = *entry;
+int
+miss_queue_insert(struct miss_queue_heap *heap, struct cache_t *cp, md_addr_t addr, enum mem_cmd cmd, void *p, int nbytes, tick_t ready_time, struct cache_blk_t *repl, byte_t **udata, md_addr_t *repl_addr, md_addr_t tag, md_addr_t set, int bofs, int valid, tick_t now) {
+  printf("miss_queue_insert\n");
+  if (heap->size >= heap->capacity) {
+    return -1;
+  }
+  struct miss_queue_entry *entry = &heap->entries[heap->size++];
+  entry->cp = cp;
+  entry->addr = addr;
+  entry->cmd = cmd;
+  entry->p = p;
+  entry->nbytes = nbytes;
+  entry->ready_time = ready_time;
+  entry->udata = udata;
+  entry->repl_addr = repl_addr;
+  entry->tag = tag;
+  entry->set = set;
+  entry->bofs = bofs;
+  entry->valid = valid;
+  int lat = 0;
+  repl = cp->sets[set].way_tail;
+/* write back replaced block data */
+  if (repl->status & CACHE_BLK_VALID)
+    {
+      cp->replacements++;
+
+      if (repl_addr)
+	*repl_addr = CACHE_MK_BADDR(cp, repl->tag, set);
+ 
+      /* don't replace the block until outstanding misses are satisfied */
+      lat += BOUND_POS(repl->ready - now);
+ 
+      /* stall until the bus to next level of memory is available */
+      lat += BOUND_POS(cp->bus_free - (now + lat));
+ 
+      /* track bus resource usage */
+      cp->bus_free = MAX(cp->bus_free, (now + lat)) + 1;
+
+      if (repl->status & CACHE_BLK_DIRTY)
+	{
+	  /* write back the cache block */
+	  cp->writebacks++;
+	  lat += cp->blk_access_fn(Write,
+				   CACHE_MK_BADDR(cp, repl->tag, set),
+				   cp->bsize, repl, now+lat);
+	}
+    }
+   /* read data block */
+  lat += cp->blk_access_fn(Read, CACHE_BADDR(cp, addr), cp->bsize,
+			   repl, now+lat);
+  
+  entry->ready_time = now + lat;
+
   int i = heap->size - 1;
   while (i > 0 && heap->entries[parent(i)].ready_time > heap->entries[i].ready_time) {
     miss_queue_swap(heap, parent(i), i);
     i = parent(i);
   }
+
+  return lat;
 }
 
 void
-miss_queue_extract_min(struct miss_queue_heap *heap, struct miss_queue_entry *entry) {
+miss_queue_extract_min(struct miss_queue_heap *heap, tick_t now) {
   if (heap->size == 0) {
     return;
   }
-  
-  *entry = heap->entries[0];
+  struct miss_queue_entry *entry = &heap->entries[0];
   heap->entries[0] = heap->entries[--heap->size];
-  miss_queue_heapify(heap, 0);  
-
+  miss_queue_heapify(heap, 0);
+  
   struct cache_t *cp = entry->cp;
-  struct cache_blk_t *blk = entry->repl;
-  md_addr_t addr = entry->addr;
-  int bofs = entry->bofs;
-  int nbytes = entry->nbytes;
-  tick_t now = entry->ready_time;
-  byte_t **udata = entry->udata;
-  md_addr_t *repl_addr = entry->repl_addr;
+  struct cache_blk_t *repl;
   md_addr_t tag = entry->tag;
   md_addr_t set = entry->set;
-  int valid = entry->valid;
+  enum mem_cmd cmd = entry->cmd;
+  void *p = entry->p;
+  int nbytes = entry->nbytes;
+  byte_t **udata = entry->udata;
+  md_addr_t *repl_addr = entry->repl_addr;
+  int bofs = entry->bofs;
+  int valid = entry->valid; 
+  int lat = entry->ready_time;  
 
-  blk->status &= ~CACHE_BLK_VALID;  
-  blk->status |= CACHE_BLK_DIRTY;
-
-  cp->writebacks++;
-  cp->blk_access_fn(Write, CACHE_MK_BADDR(cp, tag, set), cp->bsize, blk, now);
-
-  if (udata) {  
-    *udata = blk->user_data;
-  }
-
-  *repl_addr = CACHE_BADDR(cp, addr);
-  blk->ready = now + cp->hit_latency;
-  blk->status &= ~CACHE_BLK_DIRTY;  
-
-  if (cp->hsize) {
-    int hindex = CACHE_HASH(cp, tag);
-    struct cache_blk_t *prev = NULL;
-    for (struct cache_blk_t *curr = cp->sets[set].hash[hindex]; curr; curr = curr->hash_next) {
-      if (curr->tag == tag) {
-        if (prev) {
-          prev->hash_next = curr->hash_next;
-        } else {
-          cp->sets[set].hash[hindex] = curr->hash_next;
-        }
-        break;
-      }
-      prev = curr;
+  switch(cp->policy) {
+  case LRU:
+  case FIFO:
+    repl = cp->sets[set].way_tail;
+    update_way_list(&cp->sets[set], repl, Head);
+    break;
+  case Random:
+    {
+      int bindex = myrand() & (cp->assoc - 1);
+      repl = CACHE_BINDEX(cp, cp->sets[entry->set].blks, bindex);
     }
-  } else {
-    struct cache_blk_t *prev = NULL;
-    for (struct cache_blk_t *curr = cp->sets[set].way_head; curr; curr = curr->way_next) {
-      if (curr->tag == tag) {
-        if (prev) {
-          prev->way_next = curr->way_next;
-        } else {  
-          cp->sets[set].way_head = curr->way_next;    
-        }
-        break;
-      }
-      prev = curr;
-    }
+    break;
+  default:
+    panic("bogus replacement policy");
   }
 
-  if (valid) {
-    miss_queue_insert(heap, entry);
-  } else {
-    free(entry);
-  }
-}   
+  /* copy data out of cache block */
+  if (cp->balloc)
+    {
+      CACHE_BCOPY(cmd, repl, bofs, p, nbytes);
+    }
+
+  /* update dirty status */
+  if (cmd == Write)
+    repl->status |= CACHE_BLK_DIRTY;
+
+  /* get user block data, if requested and it exists */
+  if (udata)
+    *udata = repl->user_data;
+
+  /* update block status */
+  repl->ready = now+lat;
+
+  /* link this entry back into the hash table */
+  if (cp->hsize)
+    link_htab_ent(cp, &cp->sets[set], repl);
+
+  miss_queue->size--;
+}
 
 void
-miss_queue_init(struct miss_queue_heap *heap, int capacity) {
-  heap->entries = (struct miss_queue_entry *)malloc(capacity * sizeof(struct miss_queue_entry));
-  heap->size = 0;
-  heap->capacity = capacity;
+miss_queue_init() {
+  miss_queue = (struct miss_queue_heap *)malloc(sizeof(struct miss_queue_heap));
+  miss_queue->size = 0;
+  miss_queue->capacity = 10000000000;
+  miss_queue->entries = (struct miss_queue_entry *)malloc(miss_queue->capacity* sizeof(struct miss_queue_entry));
 }

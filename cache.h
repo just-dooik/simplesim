@@ -322,21 +322,15 @@ struct miss_queue_heap {
   int capacity;
 };
 
-void 
-miss_queue_swap(struct miss_queue_heap *heap, int i, int j);
+/* 전역 miss_queue 변수 선언 */
+extern struct miss_queue_heap *miss_queue;
 
+/* miss queue 관련 함수 */
+void miss_queue_swap(struct miss_queue_heap *heap, int i, int j);
+void miss_queue_heapify(struct miss_queue_heap *heap, int i);
+int miss_queue_insert(struct miss_queue_heap *heap, struct cache_t *cp, md_addr_t addr, enum mem_cmd cmd, void *p, int nbytes, tick_t ready_time, struct cache_blk_t *repl, byte_t **udata, md_addr_t *repl_addr, md_addr_t tag, md_addr_t set, int bofs, int valid, tick_t now);
+void miss_queue_extract_min(struct miss_queue_heap *heap, tick_t now);
+void miss_queue_init();
 
-void
-miss_queue_heapify(struct miss_queue_heap *heap, int i);
-
-void
-miss_queue_insert(struct miss_queue_heap *heap, struct miss_queue_entry *entry);
-
-void
-miss_queue_extract_min(struct miss_queue_heap *heap, struct miss_queue_entry *entry);
-
-void
-miss_queue_init(struct miss_queue_heap *heap, int capacity);
 
 #endif /* CACHE_H */
-

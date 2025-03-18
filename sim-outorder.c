@@ -390,6 +390,8 @@ static struct cache_t *cache_dl2;
 /* added: mshr */
 extern struct mshr_t *mshr;
 
+extern struct miss_queue_heap *miss_queue;  
+
 /* instruction TLB */
 static struct cache_t *itlb;
 
@@ -1420,7 +1422,7 @@ sim_init(void)
 
   /* allocate and initialize register file */
   regs_init(&regs);
-
+	miss_queue_init();
   /* allocate and initialize memory space */
   mem = mem_create("mem");
   mem_init(mem);
@@ -4648,7 +4650,12 @@ sim_main(void)
 
       /* go to next cycle */
       sim_cycle++;
-      mshr_update(mshr, sim_cycle); 
+      //mshr_update(mshr, sim_cycle); 
+      
+      /* 완료된 캐시 미스 처리 */
+      while (miss_queue->size > 0 && miss_queue->entries[0].ready_time <= sim_cycle) {
+        miss_queue_extract_min(miss_queue, sim_cycle);
+      }
 
       /* finish early? */
       if (max_insts && sim_num_insn >= max_insts)

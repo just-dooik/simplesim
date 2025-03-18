@@ -36,6 +36,9 @@ fi
 INPUT_NAME="$1"
 INPUT_FILE="$2"
 
+if [ "$INPUT_NAME" == "anagram" ]; then
+    INPUT_FILE="$SIMPLESIM_DIR/tests-alpha/inputs/words"
+fi
 # 바이너리 경로 검색
 BENCHMARK="$TEST_DIR/$INPUT_NAME"
 
@@ -76,7 +79,7 @@ if [ -z "$INPUT_FILE" ]; then
     "$SIMPLESIM_BIN" -cache:il1 il1:128:64:1:l -cache:dl1 dl1:128:64:1:l -cache:il2 dl2 -cache:dl2 ul2:1024:64:2:l "$BENCHMARK"
 else
     # 입력 파일이 있는 경우
-    "$SIMPLESIM_BIN" -debug:cache -cache:il1 il1:128:64:1:l -cache:dl1 dl1:128:64:1:l -cache:il2 dl2 -cache:dl2 ul2:1024:64:2:l "$BENCHMARK" < "$INPUT_FILE"
+    "$SIMPLESIM_BIN" -cache:il1 il1:128:64:1:l -cache:dl1 dl1:128:64:1:l -cache:il2 dl2 -cache:dl2 ul2:1024:64:2:l "$BENCHMARK" < "$INPUT_FILE"
 fi
 
 # 실행 결과 확인
