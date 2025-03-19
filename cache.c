@@ -921,7 +921,7 @@ miss_queue_insert(struct miss_queue_heap *heap, struct cache_t *cp, md_addr_t ad
   entry->bofs = bofs;
   entry->valid = valid;
   int lat = 0;
-  repl = cp->sets[set].way_tail;
+
 /* write back replaced block data */
   if (repl->status & CACHE_BLK_VALID)
     {
@@ -1022,8 +1022,6 @@ miss_queue_extract_min(struct miss_queue_heap *heap, tick_t now) {
   /* link this entry back into the hash table */
   if (cp->hsize)
     link_htab_ent(cp, &cp->sets[set], repl);
-
-  miss_queue->size--;
 }
 
 void
