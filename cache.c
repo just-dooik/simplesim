@@ -575,9 +575,6 @@ cache_access(struct cache_t *cp,	/* cache to access */
   /* **MISS** */
   cp->misses++;
 
-  if ((strcmp(cp->name, "itlb") || strcmp(cp->name, "dtlb"))) {
-    goto cache_miss;
-  }
 /* select the appropriate block to replace, and re-link this entry to
      the appropriate place in the way list */
   switch (cp->policy) {
@@ -639,6 +636,12 @@ cache_access(struct cache_t *cp,	/* cache to access */
   lat += cp->blk_access_fn(Read, CACHE_BADDR(cp, addr), cp->bsize,
 			   repl, now+lat);
 
+// dltb나 itlb 아니면 여기서 queue에 집어넣어야함
+  if(strcmp(cp->name, "dltb") != 0 && strcmp(cp->name, "itlb") != 0)
+  {
+    miss_queue_insert(miss_queue, cp, addr, cmd, p, nbytes, now+lat, repl, udata, repl_addr, tag, set, bofs);
+    return lat;
+  }
   /* copy data out of cache block */
   if (cp->balloc)
     {
@@ -662,11 +665,6 @@ cache_access(struct cache_t *cp,	/* cache to access */
 
   /* return latency of the operation */
   return lat;
-
-cache_miss:
-  //printf("cache_miss\n");
-  return miss_queue_insert(miss_queue, cp, addr, cmd, p, nbytes, now, repl, 
-  udata, repl_addr, tag, set, bofs, cp->sets[set].way_tail->ready, now);
 
  cache_hit: /* slow hit handler */
 
@@ -901,109 +899,79 @@ miss_queue_heapify(struct miss_queue_heap *heap, int i) {
   }
 }
 
-int
-miss_queue_insert(struct miss_queue_heap *heap, struct cache_t *cp, md_addr_t addr, enum mem_cmd cmd, void *p, int nbytes, tick_t ready_time, struct cache_blk_t *repl, byte_t **udata, md_addr_t *repl_addr, md_addr_t tag, md_addr_t set, int bofs, int valid, tick_t now) {
-  //printf("miss_queue_insert\n");
-  if (heap->size >= heap->capacity) {
-    return -1;
-  }
-  struct miss_queue_entry *entry = &heap->entries[heap->size++];
+void miss_queue_insert(
+  struct miss_queue_heap *heap,
+  struct cache_t *cp,
+  md_addr_t addr,
+  enum mem_cmd cmd,
+  void *p,
+  int nbytes,
+  tick_t ready_time,
+  struct cache_blk_t *repl,
+  byte_t **udata,
+  md_addr_t *repl_addr,
+  md_addr_t tag,
+  md_addr_t set,
+  int bofs
+)
+{
+  struct miss_queue_entry *entry = &heap->entries[heap->size];
   entry->cp = cp;
   entry->addr = addr;
   entry->cmd = cmd;
   entry->p = p;
   entry->nbytes = nbytes;
   entry->ready_time = ready_time;
+  entry->repl = repl;
   entry->udata = udata;
   entry->repl_addr = repl_addr;
   entry->tag = tag;
   entry->set = set;
   entry->bofs = bofs;
-  entry->valid = valid;
-  int lat = 0;
-
-/* write back replaced block data */
-  if (repl->status & CACHE_BLK_VALID)
-    {
-      cp->replacements++;
-
-      if (repl_addr)
-	*repl_addr = CACHE_MK_BADDR(cp, repl->tag, set);
- 
-      /* don't replace the block until outstanding misses are satisfied */
-      lat += BOUND_POS(repl->ready - now);
- 
-      /* stall until the bus to next level of memory is available */
-      lat += BOUND_POS(cp->bus_free - (now + lat));
- 
-      /* track bus resource usage */
-      cp->bus_free = MAX(cp->bus_free, (now + lat)) + 1;
-
-      if (repl->status & CACHE_BLK_DIRTY)
-	{
-	  /* write back the cache block */
-	  cp->writebacks++;
-	  lat += cp->blk_access_fn(Write,
-				   CACHE_MK_BADDR(cp, repl->tag, set),
-				   cp->bsize, repl, now+lat);
-	}
-    }
-   /* read data block */
-  lat += cp->blk_access_fn(Read, CACHE_BADDR(cp, addr), cp->bsize,
-			   repl, now+lat);
-  
-  entry->ready_time = now + lat;
+  heap->size++;
 
   int i = heap->size - 1;
   while (i > 0 && heap->entries[parent(i)].ready_time > heap->entries[i].ready_time) {
-    miss_queue_swap(heap, parent(i), i);
+    miss_queue_swap(heap, i, parent(i));
     i = parent(i);
   }
-
-  return lat;
+  return;
 }
 
 void
 miss_queue_extract_min(struct miss_queue_heap *heap, tick_t now) {
-  //printf("miss_queue_extract_min\n"); 
-  if (heap->size == 0) {
-    return;
-  }
-  struct miss_queue_entry *entry = &heap->entries[0];
-  heap->entries[0] = heap->entries[--heap->size];
+  struct miss_queue_entry *top = &heap->entries[0];
+  struct miss_queue_entry *last = &heap->entries[heap->size - 1];
+  heap->entries[0] = *last;
+  heap->size--;
   miss_queue_heapify(heap, 0);
-  
-  struct cache_t *cp = entry->cp;
-  struct cache_blk_t *repl;
-  md_addr_t tag = entry->tag;
-  md_addr_t set = entry->set;
-  enum mem_cmd cmd = entry->cmd;
-  void *p = entry->p;
-  int nbytes = entry->nbytes;
-  byte_t **udata = entry->udata;
-  md_addr_t *repl_addr = entry->repl_addr;
-  int bofs = entry->bofs;
-  int valid = entry->valid; 
-  int lat = entry->ready_time;  
 
-  switch(cp->policy) {
-  case LRU:
-  case FIFO:
-    repl = cp->sets[set].way_tail;
-    update_way_list(&cp->sets[set], repl, Head);
-    break;
-  case Random:
-    {
-      int bindex = myrand() & (cp->assoc - 1);
-      repl = CACHE_BINDEX(cp, cp->sets[entry->set].blks, bindex);
-    }
-    break;
-  default:
-    panic("bogus replacement policy");
-  }
+  struct cache_t *cp = top->cp;
+  md_addr_t addr = top->addr;
+  enum mem_cmd cmd = top->cmd;
+  void *p = top->p;
+  int nbytes = top->nbytes;
+  tick_t ready_time = top->ready_time;
+  struct cache_blk_t *repl = top->repl;
+  byte_t **udata = top->udata;
+  md_addr_t *repl_addr = top->repl_addr;
+  md_addr_t tag = top->tag;
+  md_addr_t set = top->set;
+  int bofs = top->bofs;
 
-  /* copy data out of cache block */
-  if (cp->balloc)
+  /* update dirty status */
+  if (cmd == Write)
+    repl->status |= CACHE_BLK_DIRTY;
+
+  /* get user block data, if requested and it exists */
+  if (udata)
+    *udata = repl->user_data;
+
+  /* link this entry back into the hash table */
+  if (cp->hsize)
+    link_htab_ent(cp, &cp->sets[set], repl);
+
+    if (cp->balloc)
     {
       CACHE_BCOPY(cmd, repl, bofs, p, nbytes);
     }
@@ -1017,17 +985,13 @@ miss_queue_extract_min(struct miss_queue_heap *heap, tick_t now) {
     *udata = repl->user_data;
 
   /* update block status */
-  repl->ready = now+lat;
-
-  /* link this entry back into the hash table */
-  if (cp->hsize)
-    link_htab_ent(cp, &cp->sets[set], repl);
+  repl->ready = now;
 }
 
 void
 miss_queue_init() {
   miss_queue = (struct miss_queue_heap *)malloc(sizeof(struct miss_queue_heap));
   miss_queue->size = 0;
-  miss_queue->capacity = 10000000000;
+  miss_queue->capacity = 10000;
   miss_queue->entries = (struct miss_queue_entry *)malloc(miss_queue->capacity* sizeof(struct miss_queue_entry));
 }
