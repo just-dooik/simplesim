@@ -907,7 +907,7 @@ void miss_queue_insert(
   void *p,
   int nbytes,
   tick_t ready_time,
-  struct cache_blk_t *repl,
+  struct cache_blk_t *repl, 
   byte_t **udata,
   md_addr_t *repl_addr,
   md_addr_t tag,
